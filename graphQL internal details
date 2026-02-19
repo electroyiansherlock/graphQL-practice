@@ -1,0 +1,210 @@
+Because in your server schema:
+
+type Review {
+  id: ID!
+  rating: Int
+}
+
+
+👉 Review has only id and rating
+👉 There is no field named author inside Review
+
+So if a client sends:
+
+query {
+  review {
+    id
+    rating
+    author {
+      id
+      name
+    }
+  }
+}
+
+
+GraphQL does this validation before any backend code runs:
+
+❌ “author does not exist on type Review”
+➡️ Query fails
+➡️ No partial response
+➡️ Resolver is never called
+
+This is why GraphQL feels strict compared to REST.
+
+Simple mental model (fits how you like explanations)
+
+Schema = contract
+Query = request that must follow contract
+
+If contract says:
+
+Review → { id, rating }
+
+
+Client cannot suddenly ask for:
+
+Review → { id, rating, author }
+
+
+Same idea as when your Java code with Tablesaw throws an error when a column is not part of the table structure — the data might exist somewhere in the system, but it’s not part of that object’s shape.
+
+When your query WOULD work
+
+You must explicitly define the relationship:
+
+type Review {
+  id: ID!
+  rating: Int
+  author: Author
+}
+
+
+Then GraphQL allows nested selection, and your resolver decides how to fetch the author (for example calling your Spring service — just like how you imagined Apollo acting as the middle layer earlier).
+
+GraphQL is designed so:
+
+Schema defines what is possible
+Query defines what is returned
+
+Database structure is irrelevant to the client.
+
+Flow (similar to your React → Apollo → Spring mental model):
+
+1️⃣ Client sends query
+2️⃣ GraphQL validates against schema
+3️⃣ Resolver fetches data from DB / REST / service
+4️⃣ Resolver returns only schema fields
+5️⃣ Extra DB fields are ignored
+
+Even if resolver fetches full DB object:
+
+ReviewEntity entity = reviewRepository.findById(id);
+
+GraphQL response still includes only requested schema fields.
+
+Database can have 10 fields, schema can expose only 6
+Totally allowed. Very common actually.
+
+
+The apollo server which is actually querying the server to fetch the data needs 2 things, typeDef (which is the schema), and the resolver functions (the function executing behind the scenes fetching the data from the database).
+
+You return a full object in the resolver, and Apollo Server (GraphQL execution engine) automatically picks only the fields requested in the query.
+
+You don’t manually filter fields in the resolver.
+
+
+Resolver runs and returns full object
+
+Example resolver:
+
+Query: {
+  review: async () => {
+    return reviewService.getReviews(); 
+    // suppose each review has 10 properties from DB
+  }
+}
+
+
+Returned object might be:
+
+{
+  "id": "101",
+  "rating": 5,
+  "comment": "Nice",
+  "authorId": "A1",
+  "internalFlag": true,
+  "createdAt": "2025-01-01"
+}
+
+
+Resolver doesn’t trim anything.
+
+Now Apollo Server looks at:
+
+✔ schema definition
+✔ query selection set
+✔ returned object
+
+Then it builds response containing only requested fields:
+
+{
+  "data": {
+    "review": [
+      {
+        "id": "101",
+        "rating": 5
+      }
+    ]
+  }
+}
+
+Everything else is ignored.
+
+👉 This is automatic
+👉 You don’t write code for this
+👉 It’s core GraphQL behavior (not Apollo-specific magic)
+
+
+Apollo Server is the GraphQL server
+The browser / React app is the client
+Apollo executes the schema + resolvers and builds the response
+
+So the flow is:
+
+Client → Apollo Server → Resolvers → Data sources → Apollo shapes response → Client
+
+
+1. Client sends query
+
+From React (like you described earlier with Apollo + Spring backend idea).
+
+2️. GraphQL server validates query against schema
+
+It checks:
+
+type Query {
+  author: [Author]!
+}
+
+type Author {
+  id: ID!
+  name: String!
+}
+
+
+If requested fields don’t exist → error immediately
+(Just like your Tablesaw “column not present” scenario.)
+
+3️. Resolver for Query.author executes
+
+Example conceptually:
+
+Query: {
+  author: () => authorService.getAuthors()
+}
+
+
+Resolver may return full DB object with many fields.
+
+4️. GraphQL execution engine selects requested fields
+
+Apollo Server (the GraphQL runtime) takes:
+
+✔ schema
+✔ query selection set
+✔ resolver result
+
+Then constructs response with only id and name.
+
+You never manually trim fields.
+
+5️. Response returned to client
+
+{
+  "data": {
+    "author": [
+      { "id": "1", "name": "Varun" }
+    ]
+  }
+}
