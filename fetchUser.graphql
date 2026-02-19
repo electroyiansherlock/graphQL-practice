@@ -1,0 +1,20 @@
+query fetchUser($id: ID!) {
+  user(id: $id) {
+    id,
+    name,
+    email,
+    phone,
+    website,
+    address {
+      street,
+      suite,
+      city,
+      zipcode,
+    },
+    company {
+      name,
+      bs,
+      catchPhrase
+    }
+  }
+}
