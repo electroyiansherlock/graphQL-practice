@@ -1,0 +1,7 @@
+mutation updateReview($id: ID!, $updateReviewArg: UpdateReview!){
+  updateReview(id: $id, updateReviewArg: $updateReviewArg) {
+    id,
+    rating, 
+    content
+  }
+}
